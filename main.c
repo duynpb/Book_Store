@@ -1,509 +1,559 @@
 #include <stdio.h>
 #include <string.h>
-#include <ctype.h>
 
-#define MAX_CUSTOMERS 300
-#define MAX_BOOKS 500
-#define MAX_INVOICE_ITEMS 100
-#define MAX_INVOICES 500
-#define STR_SMALL 32
-#define STR_MED 64
-#define STR_LARGE 128
-#define PHONE_LEN 20
-#define DATE_LEN 16
+/* ================== Cau hinh ================== */
+#define MAX_CUSTOMERS 100
+#define MAX_BOOKS 200
+#define MAX_INVOICES 100
+#define MAX_ITEMS_PER_INVOICE 20
 
-typedef struct {
-    char id[STR_SMALL];
-    char name[STR_MED];
-    char phone[PHONE_LEN];
-    char email[STR_MED];
-    char address[STR_LARGE];
-    char regDate[DATE_LEN];
-    int isVIP; /* 0: Thuong, 1: VIP */
-    int active;
-} Customer;
+#define LEN_ID 30
+#define LEN_NAME 60
+#define LEN_PHONE 20
+#define LEN_EMAIL 60
+#define LEN_ADDRESS 100
+#define LEN_DATE 20
+#define LEN_CATEGORY 40
 
-typedef struct {
-    char isbn[STR_SMALL];
-    char title[STR_LARGE];
-    char author[STR_MED];
-    char publisher[STR_MED];
-    int year;
-    char category[STR_MED];
-    double importPrice;
-    double sellPrice;
-    int stock;
-    int active;
-} Book;
+/* ==========================================================
+   KHONG dung struct theo yeu cau -> dung mang song song
+   Moi dong i cua cac mang la 1 ban ghi khach hang / sach / hoa don
+   ========================================================== */
 
-typedef struct {
-    char isbn[STR_SMALL];
-    int quantity;
-    double unitPrice;
-    double lineTotal;
-} InvoiceItem;
-
-typedef struct {
-    char invoiceId[STR_SMALL];
-    char customerId[STR_SMALL];
-    char date[DATE_LEN];
-    InvoiceItem items[MAX_INVOICE_ITEMS];
-    int itemCount;
-    double subTotal;
-    double discount;
-    double vat;
-    double total;
-    int active;
-} Invoice;
-
-Customer customers[MAX_CUSTOMERS];
-Book books[MAX_BOOKS];
-Invoice invoices[MAX_INVOICES];
-
+/* -------- Khach hang -------- */
 int customerCount = 0;
+char customerId[MAX_CUSTOMERS][LEN_ID];
+char customerName[MAX_CUSTOMERS][LEN_NAME];
+char customerPhone[MAX_CUSTOMERS][LEN_PHONE];
+char customerEmail[MAX_CUSTOMERS][LEN_EMAIL];
+char customerAddress[MAX_CUSTOMERS][LEN_ADDRESS];
+char customerRegisterDate[MAX_CUSTOMERS][LEN_DATE];
+int customerTypeVIP[MAX_CUSTOMERS]; /* 0: Thuong, 1: VIP */
+int customerActive[MAX_CUSTOMERS];  /* 1: con ton tai, 0: da xoa */
+
+/* -------- Sach -------- */
 int bookCount = 0;
+char bookISBN[MAX_BOOKS][LEN_ID];
+char bookTitle[MAX_BOOKS][LEN_NAME];
+char bookAuthor[MAX_BOOKS][LEN_NAME];
+char bookPublisher[MAX_BOOKS][LEN_NAME];
+int bookYear[MAX_BOOKS];
+char bookCategory[MAX_BOOKS][LEN_CATEGORY];
+double bookImportPrice[MAX_BOOKS];
+double bookSellPrice[MAX_BOOKS];
+int bookStock[MAX_BOOKS];
+int bookActive[MAX_BOOKS];
+
+/* -------- Hoa don -------- */
 int invoiceCount = 0;
+char invoiceId[MAX_INVOICES][LEN_ID];
+char invoiceCustomerId[MAX_INVOICES][LEN_ID];
+char invoiceDate[MAX_INVOICES][LEN_DATE];
+int invoiceItemCount[MAX_INVOICES];
+double invoiceSubtotal[MAX_INVOICES];
+double invoiceDiscount[MAX_INVOICES];
+double invoiceVAT[MAX_INVOICES];
+double invoiceTotal[MAX_INVOICES];
+int invoiceActive[MAX_INVOICES];
 
-void readLine(char *buffer, int size) {
-    if (fgets(buffer, size, stdin) != NULL) {
-        buffer[strcspn(buffer, "\n")] = '\0';
-    }
+/* Chi tiet hoa don: [so_hoa_don][dong_hang] */
+char invoiceItemISBN[MAX_INVOICES][MAX_ITEMS_PER_INVOICE][LEN_ID];
+int invoiceItemQty[MAX_INVOICES][MAX_ITEMS_PER_INVOICE];
+double invoiceItemUnitPrice[MAX_INVOICES][MAX_ITEMS_PER_INVOICE];
+double invoiceItemLineTotal[MAX_INVOICES][MAX_ITEMS_PER_INVOICE];
+
+/* ================== Ham ho tro ================== */
+void readLine(char s[], int maxLen) {
+    fgets(s, maxLen, stdin);
+    s[strcspn(s, "\n")] = '\0';
 }
 
-void toLowerStr(char *s) {
-    int i;
-    for (i = 0; s[i] != '\0'; i++) {
-        s[i] = (char)tolower((unsigned char)s[i]);
-    }
-}
-
-int containsIgnoreCase(const char *text, const char *keyword) {
-    char a[STR_LARGE], b[STR_LARGE];
-    strncpy(a, text, sizeof(a) - 1);
-    a[sizeof(a) - 1] = '\0';
-    strncpy(b, keyword, sizeof(b) - 1);
-    b[sizeof(b) - 1] = '\0';
-    toLowerStr(a);
-    toLowerStr(b);
-    return strstr(a, b) != NULL;
-}
-
-int findCustomerIndexById(const char *id) {
+int findCustomerById(const char id[]) {
     int i;
     for (i = 0; i < customerCount; i++) {
-        if (customers[i].active && strcmp(customers[i].id, id) == 0) return i;
-    }
-    return -1;
-}
-
-int findBookIndexByISBN(const char *isbn) {
-    int i;
-    for (i = 0; i < bookCount; i++) {
-        if (books[i].active && strcmp(books[i].isbn, isbn) == 0) return i;
-    }
-    return -1;
-}
-
-void printCustomerHeader() {
-    printf("%-10s %-20s %-15s %-22s %-8s\n", "MaKH", "Ho ten", "SDT", "Email", "Loai");
-}
-
-void viewCustomers() {
-    int i, found = 0;
-    printCustomerHeader();
-    for (i = 0; i < customerCount; i++) {
-        if (customers[i].active) {
-            found = 1;
-            printf("%-10s %-20s %-15s %-22s %-8s\n",
-                   customers[i].id,
-                   customers[i].name,
-                   customers[i].phone,
-                   customers[i].email,
-                   customers[i].isVIP ? "VIP" : "Thuong");
+        if (customerActive[i] == 1 && strcmp(customerId[i], id) == 0) {
+            return i;
         }
     }
-    if (!found) printf("Khong co khach hang nao.\n");
+    return -1;
+}
+
+int findBookByISBN(const char isbn[]) {
+    int i;
+    for (i = 0; i < bookCount; i++) {
+        if (bookActive[i] == 1 && strcmp(bookISBN[i], isbn) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int containsText(const char text[], const char keyword[]) {
+    /* Ban don gian: so khop dung chu hoa/thuong */
+    if (strstr(text, keyword) != NULL) return 1;
+    return 0;
+}
+
+/* ================== Khach hang ================== */
+void listCustomers() {
+    int i, found = 0;
+    printf("\n--- Danh sach khach hang ---\n");
+    for (i = 0; i < customerCount; i++) {
+        if (customerActive[i] == 1) {
+            found = 1;
+            printf("%s | %s | %s | %s | %s\n",
+                   customerId[i], customerName[i], customerPhone[i],
+                   customerEmail[i], customerTypeVIP[i] ? "VIP" : "Thuong");
+        }
+    }
+    if (!found) printf("Chua co khach hang nao.\n");
 }
 
 void addCustomer() {
-    Customer c;
     if (customerCount >= MAX_CUSTOMERS) {
         printf("Danh sach khach hang da day.\n");
         return;
     }
-    printf("Nhap ma khach hang: "); readLine(c.id, STR_SMALL);
-    if (findCustomerIndexById(c.id) != -1) {
-        printf("Ma khach hang da ton tai.\n");
+
+    printf("Ma KH: ");
+    readLine(customerId[customerCount], LEN_ID);
+
+    if (findCustomerById(customerId[customerCount]) != -1) {
+        printf("Ma KH da ton tai.\n");
         return;
     }
-    printf("Nhap ho ten: "); readLine(c.name, STR_MED);
-    printf("Nhap so dien thoai: "); readLine(c.phone, PHONE_LEN);
-    printf("Nhap email: "); readLine(c.email, STR_MED);
-    printf("Nhap dia chi: "); readLine(c.address, STR_LARGE);
-    printf("Nhap ngay dang ky (dd/mm/yyyy): "); readLine(c.regDate, DATE_LEN);
-    printf("Loai thanh vien (0=Thuong, 1=VIP): "); scanf("%d", &c.isVIP); getchar();
 
-    c.active = 1;
-    customers[customerCount++] = c;
+    printf("Ten KH: "); readLine(customerName[customerCount], LEN_NAME);
+    printf("SDT: "); readLine(customerPhone[customerCount], LEN_PHONE);
+    printf("Email: "); readLine(customerEmail[customerCount], LEN_EMAIL);
+    printf("Dia chi: "); readLine(customerAddress[customerCount], LEN_ADDRESS);
+    printf("Ngay dang ky: "); readLine(customerRegisterDate[customerCount], LEN_DATE);
+    printf("Loai (0 Thuong, 1 VIP): "); scanf("%d", &customerTypeVIP[customerCount]); getchar();
+
+    customerActive[customerCount] = 1;
+    customerCount++;
     printf("Them khach hang thanh cong.\n");
 }
 
 void editCustomer() {
-    char id[STR_SMALL];
-    int idx;
-    printf("Nhap ma khach hang can sua: "); readLine(id, STR_SMALL);
-    idx = findCustomerIndexById(id);
-    if (idx == -1) {
-        printf("Khong tim thay khach hang.\n");
+    char id[LEN_ID];
+    int i;
+
+    printf("Nhap ma KH can sua: ");
+    readLine(id, LEN_ID);
+
+    i = findCustomerById(id);
+    if (i == -1) {
+        printf("Khong tim thay KH.\n");
         return;
     }
-    printf("Nhap ho ten moi: "); readLine(customers[idx].name, STR_MED);
-    printf("Nhap SDT moi: "); readLine(customers[idx].phone, PHONE_LEN);
-    printf("Nhap email moi: "); readLine(customers[idx].email, STR_MED);
-    printf("Nhap dia chi moi: "); readLine(customers[idx].address, STR_LARGE);
-    printf("Nhap loai (0=Thuong, 1=VIP): "); scanf("%d", &customers[idx].isVIP); getchar();
-    printf("Cap nhat khach hang thanh cong.\n");
+
+    printf("Ten moi: "); readLine(customerName[i], LEN_NAME);
+    printf("SDT moi: "); readLine(customerPhone[i], LEN_PHONE);
+    printf("Email moi: "); readLine(customerEmail[i], LEN_EMAIL);
+    printf("Dia chi moi: "); readLine(customerAddress[i], LEN_ADDRESS);
+    printf("Loai moi (0 Thuong, 1 VIP): "); scanf("%d", &customerTypeVIP[i]); getchar();
+
+    printf("Da cap nhat KH.\n");
 }
 
 void deleteCustomer() {
-    char id[STR_SMALL];
-    int idx;
-    printf("Nhap ma khach hang can xoa: "); readLine(id, STR_SMALL);
-    idx = findCustomerIndexById(id);
-    if (idx == -1) {
-        printf("Khong tim thay khach hang.\n");
+    char id[LEN_ID];
+    int i;
+
+    printf("Nhap ma KH can xoa: ");
+    readLine(id, LEN_ID);
+
+    i = findCustomerById(id);
+    if (i == -1) {
+        printf("Khong tim thay KH.\n");
         return;
     }
-    customers[idx].active = 0;
-    printf("Xoa khach hang thanh cong.\n");
+
+    customerActive[i] = 0;
+    printf("Da xoa KH.\n");
 }
 
 void searchCustomerByPhone() {
-    char phone[PHONE_LEN];
+    char phone[LEN_PHONE];
     int i, found = 0;
-    printf("Nhap SDT can tim: "); readLine(phone, PHONE_LEN);
-    printCustomerHeader();
+
+    printf("Nhap SDT can tim: ");
+    readLine(phone, LEN_PHONE);
+
     for (i = 0; i < customerCount; i++) {
-        if (customers[i].active && strcmp(customers[i].phone, phone) == 0) {
+        if (customerActive[i] == 1 && strcmp(customerPhone[i], phone) == 0) {
             found = 1;
-            printf("%-10s %-20s %-15s %-22s %-8s\n",
-                   customers[i].id, customers[i].name, customers[i].phone,
-                   customers[i].email, customers[i].isVIP ? "VIP" : "Thuong");
+            printf("%s | %s | %s\n", customerId[i], customerName[i], customerPhone[i]);
         }
     }
-    if (!found) printf("Khong tim thay theo SDT.\n");
+
+    if (!found) printf("Khong tim thay.\n");
 }
 
 void searchCustomerByName() {
-    char key[STR_MED];
+    char keyword[LEN_NAME];
     int i, found = 0;
-    printf("Nhap ten can tim: "); readLine(key, STR_MED);
-    printCustomerHeader();
+
+    printf("Nhap ten can tim: ");
+    readLine(keyword, LEN_NAME);
+
     for (i = 0; i < customerCount; i++) {
-        if (customers[i].active && containsIgnoreCase(customers[i].name, key)) {
+        if (customerActive[i] == 1 && containsText(customerName[i], keyword)) {
             found = 1;
-            printf("%-10s %-20s %-15s %-22s %-8s\n",
-                   customers[i].id, customers[i].name, customers[i].phone,
-                   customers[i].email, customers[i].isVIP ? "VIP" : "Thuong");
+            printf("%s | %s\n", customerId[i], customerName[i]);
         }
     }
-    if (!found) printf("Khong tim thay theo ten.\n");
+
+    if (!found) printf("Khong tim thay.\n");
 }
 
-void viewBooks() {
+/* ================== Sach ================== */
+void listBooks() {
     int i, found = 0;
-    printf("%-14s %-20s %-12s %-8s %-10s\n", "ISBN", "Ten sach", "The loai", "GiaBan", "TonKho");
+    printf("\n--- Danh sach sach ---\n");
     for (i = 0; i < bookCount; i++) {
-        if (books[i].active) {
+        if (bookActive[i] == 1) {
             found = 1;
-            printf("%-14s %-20s %-12s %-8.2f %-10d\n",
-                   books[i].isbn, books[i].title, books[i].category,
-                   books[i].sellPrice, books[i].stock);
+            printf("%s | %s | %s | Gia %.2f | Ton %d\n",
+                   bookISBN[i], bookTitle[i], bookCategory[i], bookSellPrice[i], bookStock[i]);
         }
     }
-    if (!found) printf("Khong co sach nao.\n");
+    if (!found) printf("Chua co sach nao.\n");
 }
 
 void addBook() {
-    Book b;
     if (bookCount >= MAX_BOOKS) {
         printf("Danh sach sach da day.\n");
         return;
     }
-    printf("Nhap ISBN: "); readLine(b.isbn, STR_SMALL);
-    if (findBookIndexByISBN(b.isbn) != -1) {
+
+    printf("ISBN: ");
+    readLine(bookISBN[bookCount], LEN_ID);
+
+    if (findBookByISBN(bookISBN[bookCount]) != -1) {
         printf("ISBN da ton tai.\n");
         return;
     }
-    printf("Nhap ten sach: "); readLine(b.title, STR_LARGE);
-    printf("Nhap tac gia: "); readLine(b.author, STR_MED);
-    printf("Nhap NXB: "); readLine(b.publisher, STR_MED);
-    printf("Nhap nam xuat ban: "); scanf("%d", &b.year); getchar();
-    printf("Nhap the loai: "); readLine(b.category, STR_MED);
-    printf("Nhap gia nhap: "); scanf("%lf", &b.importPrice); getchar();
-    printf("Nhap gia ban: "); scanf("%lf", &b.sellPrice); getchar();
-    printf("Nhap so luong ton kho: "); scanf("%d", &b.stock); getchar();
-    b.active = 1;
-    books[bookCount++] = b;
+
+    printf("Ten sach: "); readLine(bookTitle[bookCount], LEN_NAME);
+    printf("Tac gia: "); readLine(bookAuthor[bookCount], LEN_NAME);
+    printf("NXB: "); readLine(bookPublisher[bookCount], LEN_NAME);
+    printf("Nam XB: "); scanf("%d", &bookYear[bookCount]); getchar();
+    printf("The loai: "); readLine(bookCategory[bookCount], LEN_CATEGORY);
+    printf("Gia nhap: "); scanf("%lf", &bookImportPrice[bookCount]); getchar();
+    printf("Gia ban: "); scanf("%lf", &bookSellPrice[bookCount]); getchar();
+    printf("Ton kho: "); scanf("%d", &bookStock[bookCount]); getchar();
+
+    bookActive[bookCount] = 1;
+    bookCount++;
     printf("Them sach thanh cong.\n");
 }
 
 void editBook() {
-    char isbn[STR_SMALL];
-    int idx;
-    printf("Nhap ISBN can sua: "); readLine(isbn, STR_SMALL);
-    idx = findBookIndexByISBN(isbn);
-    if (idx == -1) {
+    char isbn[LEN_ID];
+    int i;
+
+    printf("Nhap ISBN can sua: ");
+    readLine(isbn, LEN_ID);
+
+    i = findBookByISBN(isbn);
+    if (i == -1) {
         printf("Khong tim thay sach.\n");
         return;
     }
-    printf("Nhap ten sach moi: "); readLine(books[idx].title, STR_LARGE);
-    printf("Nhap tac gia moi: "); readLine(books[idx].author, STR_MED);
-    printf("Nhap NXB moi: "); readLine(books[idx].publisher, STR_MED);
-    printf("Nhap nam xuat ban moi: "); scanf("%d", &books[idx].year); getchar();
-    printf("Nhap the loai moi: "); readLine(books[idx].category, STR_MED);
-    printf("Nhap gia nhap moi: "); scanf("%lf", &books[idx].importPrice); getchar();
-    printf("Nhap gia ban moi: "); scanf("%lf", &books[idx].sellPrice); getchar();
-    printf("Nhap ton kho moi: "); scanf("%d", &books[idx].stock); getchar();
-    printf("Cap nhat sach thanh cong.\n");
+
+    printf("Ten moi: "); readLine(bookTitle[i], LEN_NAME);
+    printf("Tac gia moi: "); readLine(bookAuthor[i], LEN_NAME);
+    printf("NXB moi: "); readLine(bookPublisher[i], LEN_NAME);
+    printf("Nam moi: "); scanf("%d", &bookYear[i]); getchar();
+    printf("The loai moi: "); readLine(bookCategory[i], LEN_CATEGORY);
+    printf("Gia nhap moi: "); scanf("%lf", &bookImportPrice[i]); getchar();
+    printf("Gia ban moi: "); scanf("%lf", &bookSellPrice[i]); getchar();
+    printf("Ton kho moi: "); scanf("%d", &bookStock[i]); getchar();
+
+    printf("Da cap nhat sach.\n");
 }
 
 void deleteBook() {
-    char isbn[STR_SMALL];
-    int idx;
-    printf("Nhap ISBN can xoa: "); readLine(isbn, STR_SMALL);
-    idx = findBookIndexByISBN(isbn);
-    if (idx == -1) {
+    char isbn[LEN_ID];
+    int i;
+
+    printf("Nhap ISBN can xoa: ");
+    readLine(isbn, LEN_ID);
+
+    i = findBookByISBN(isbn);
+    if (i == -1) {
         printf("Khong tim thay sach.\n");
         return;
     }
-    if (books[idx].stock != 0) {
-        printf("Chi duoc xoa khi ton kho bang 0.\n");
+
+    if (bookStock[i] != 0) {
+        printf("Chi duoc xoa khi ton kho = 0.\n");
         return;
     }
-    books[idx].active = 0;
-    printf("Xoa sach thanh cong.\n");
+
+    bookActive[i] = 0;
+    printf("Da xoa sach.\n");
 }
 
 void searchBookByISBN() {
-    char isbn[STR_SMALL];
-    int idx;
-    printf("Nhap ISBN can tim: "); readLine(isbn, STR_SMALL);
-    idx = findBookIndexByISBN(isbn);
-    if (idx == -1) {
+    char isbn[LEN_ID];
+    int i;
+
+    printf("Nhap ISBN can tim: ");
+    readLine(isbn, LEN_ID);
+
+    i = findBookByISBN(isbn);
+    if (i == -1) {
         printf("Khong tim thay sach.\n");
         return;
     }
-    printf("Sach: %s | %s | Ton kho: %d | Gia ban: %.2f\n",
-           books[idx].isbn, books[idx].title, books[idx].stock, books[idx].sellPrice);
+
+    printf("%s | %s | Ton %d | Gia %.2f\n", bookISBN[i], bookTitle[i], bookStock[i], bookSellPrice[i]);
 }
 
 void searchBookByTitle() {
-    char key[STR_MED];
+    char keyword[LEN_NAME];
     int i, found = 0;
-    printf("Nhap ten sach can tim: "); readLine(key, STR_MED);
+
+    printf("Nhap ten sach can tim: ");
+    readLine(keyword, LEN_NAME);
+
     for (i = 0; i < bookCount; i++) {
-        if (books[i].active && containsIgnoreCase(books[i].title, key)) {
+        if (bookActive[i] == 1 && containsText(bookTitle[i], keyword)) {
             found = 1;
-            printf("%s | %s | Ton kho: %d | Gia ban: %.2f\n",
-                   books[i].isbn, books[i].title, books[i].stock, books[i].sellPrice);
+            printf("%s | %s\n", bookISBN[i], bookTitle[i]);
         }
     }
-    if (!found) printf("Khong tim thay sach theo ten.\n");
+
+    if (!found) printf("Khong tim thay sach.\n");
 }
 
+/* ================== Hoa don + kho + thong ke ================== */
 void createInvoice() {
-    Invoice inv;
-    int cIdx, n, i;
+    int i, n, customerIndex;
 
     if (invoiceCount >= MAX_INVOICES) {
         printf("Danh sach hoa don da day.\n");
         return;
     }
-    printf("Nhap ma hoa don: "); readLine(inv.invoiceId, STR_SMALL);
-    printf("Nhap ma khach hang: "); readLine(inv.customerId, STR_SMALL);
-    cIdx = findCustomerIndexById(inv.customerId);
-    if (cIdx == -1) {
+
+    printf("Ma hoa don: "); readLine(invoiceId[invoiceCount], LEN_ID);
+    printf("Ma khach hang: "); readLine(invoiceCustomerId[invoiceCount], LEN_ID);
+
+    customerIndex = findCustomerById(invoiceCustomerId[invoiceCount]);
+    if (customerIndex == -1) {
         printf("Khach hang khong ton tai.\n");
         return;
     }
-    printf("Nhap ngay lap (dd/mm/yyyy): "); readLine(inv.date, DATE_LEN);
-    printf("Nhap so dong sach trong hoa don: "); scanf("%d", &n); getchar();
-    if (n <= 0 || n > MAX_INVOICE_ITEMS) {
+
+    printf("Ngay lap: "); readLine(invoiceDate[invoiceCount], LEN_DATE);
+
+    printf("So dong sach: ");
+    scanf("%d", &n);
+    getchar();
+
+    if (n <= 0 || n > MAX_ITEMS_PER_INVOICE) {
         printf("So dong khong hop le.\n");
         return;
     }
 
-    inv.itemCount = n;
-    inv.subTotal = 0.0;
+    invoiceItemCount[invoiceCount] = n;
+    invoiceSubtotal[invoiceCount] = 0;
+
     for (i = 0; i < n; i++) {
-        int bIdx;
-        printf("--- Dong %d ---\n", i + 1);
-        printf("ISBN: "); readLine(inv.items[i].isbn, STR_SMALL);
-        bIdx = findBookIndexByISBN(inv.items[i].isbn);
-        if (bIdx == -1) {
+        int bi;
+        printf("\nDong %d\n", i + 1);
+
+        printf("ISBN: ");
+        readLine(invoiceItemISBN[invoiceCount][i], LEN_ID);
+
+        bi = findBookByISBN(invoiceItemISBN[invoiceCount][i]);
+        if (bi == -1) {
             printf("ISBN khong ton tai.\n");
             return;
         }
-        printf("So luong: "); scanf("%d", &inv.items[i].quantity); getchar();
-        if (inv.items[i].quantity <= 0 || inv.items[i].quantity > books[bIdx].stock) {
-            printf("So luong khong hop le / vuot ton kho.\n");
+
+        printf("So luong: ");
+        scanf("%d", &invoiceItemQty[invoiceCount][i]);
+        getchar();
+
+        if (invoiceItemQty[invoiceCount][i] <= 0 || invoiceItemQty[invoiceCount][i] > bookStock[bi]) {
+            printf("So luong khong hop le hoac vuot ton kho.\n");
             return;
         }
 
-        inv.items[i].unitPrice = books[bIdx].sellPrice;
-        inv.items[i].lineTotal = inv.items[i].quantity * inv.items[i].unitPrice;
+        invoiceItemUnitPrice[invoiceCount][i] = bookSellPrice[bi];
+        invoiceItemLineTotal[invoiceCount][i] = invoiceItemUnitPrice[invoiceCount][i] * invoiceItemQty[invoiceCount][i];
 
-        if (inv.items[i].quantity > 5) {
-            inv.items[i].lineTotal *= 0.95; /* giam 5% neu mua >5 cung dau sach */
+        if (invoiceItemQty[invoiceCount][i] > 5) {
+            invoiceItemLineTotal[invoiceCount][i] = invoiceItemLineTotal[invoiceCount][i] * 0.95;
         }
 
-        inv.subTotal += inv.items[i].lineTotal;
-        books[bIdx].stock -= inv.items[i].quantity;
+        invoiceSubtotal[invoiceCount] += invoiceItemLineTotal[invoiceCount][i];
+
+        /* Tru ton kho sau khi ban */
+        bookStock[bi] -= invoiceItemQty[invoiceCount][i];
     }
 
-    inv.discount = 0.0;
-    if (customers[cIdx].isVIP) {
-        inv.discount += inv.subTotal * 0.10;
+    if (customerTypeVIP[customerIndex] == 1) {
+        invoiceDiscount[invoiceCount] = invoiceSubtotal[invoiceCount] * 0.10;
+    } else {
+        invoiceDiscount[invoiceCount] = 0;
     }
 
     {
-        double afterDiscount = inv.subTotal - inv.discount;
-        inv.vat = afterDiscount * 0.10;
-        inv.total = afterDiscount + inv.vat;
+        double afterDiscount = invoiceSubtotal[invoiceCount] - invoiceDiscount[invoiceCount];
+        invoiceVAT[invoiceCount] = afterDiscount * 0.10;
+        invoiceTotal[invoiceCount] = afterDiscount + invoiceVAT[invoiceCount];
     }
 
-    inv.active = 1;
-    invoices[invoiceCount++] = inv;
+    invoiceActive[invoiceCount] = 1;
 
-    printf("\n===== HOA DON =====\n");
-    printf("Ma HD: %s | Ma KH: %s | Ngay: %s\n", inv.invoiceId, inv.customerId, inv.date);
-    for (i = 0; i < inv.itemCount; i++) {
-        printf("%s | SL: %d | Don gia: %.2f | Thanh tien: %.2f\n",
-               inv.items[i].isbn, inv.items[i].quantity, inv.items[i].unitPrice, inv.items[i].lineTotal);
-    }
-    printf("Tam tinh: %.2f\n", inv.subTotal);
-    printf("Giam gia: %.2f\n", inv.discount);
-    printf("VAT 10%%: %.2f\n", inv.vat);
-    printf("Tong thanh toan: %.2f\n", inv.total);
+    printf("\n--- HOA DON ---\n");
+    printf("Ma HD: %s\n", invoiceId[invoiceCount]);
+    printf("Tam tinh: %.2f\n", invoiceSubtotal[invoiceCount]);
+    printf("Giam gia: %.2f\n", invoiceDiscount[invoiceCount]);
+    printf("VAT: %.2f\n", invoiceVAT[invoiceCount]);
+    printf("Tong thanh toan: %.2f\n", invoiceTotal[invoiceCount]);
+
+    invoiceCount++;
 }
 
 void updateStock() {
-    char isbn[STR_SMALL];
-    int idx, addQty;
-    printf("Nhap ISBN can cap nhat ton kho: "); readLine(isbn, STR_SMALL);
-    idx = findBookIndexByISBN(isbn);
-    if (idx == -1) {
+    char isbn[LEN_ID];
+    int i, delta;
+
+    printf("Nhap ISBN can cap nhat ton: ");
+    readLine(isbn, LEN_ID);
+
+    i = findBookByISBN(isbn);
+    if (i == -1) {
         printf("Khong tim thay sach.\n");
         return;
     }
-    printf("Nhap so luong nhap them (co the am neu can dieu chinh): "); scanf("%d", &addQty); getchar();
-    if (books[idx].stock + addQty < 0) {
-        printf("Khong the de ton kho am.\n");
+
+    printf("Nhap so luong thay doi (co the am): ");
+    scanf("%d", &delta);
+    getchar();
+
+    if (bookStock[i] + delta < 0) {
+        printf("Ton kho khong duoc am.\n");
         return;
     }
-    books[idx].stock += addQty;
-    printf("Cap nhat ton kho thanh cong. Ton moi: %d\n", books[idx].stock);
+
+    bookStock[i] += delta;
+    printf("Ton moi: %d\n", bookStock[i]);
 }
 
-void basicStats() {
+void statistics() {
     int i;
     int totalStock = 0;
     int outOfStock = 0;
-    int vip = 0, normal = 0;
+    int vipCount = 0;
+    int normalCount = 0;
     double revenue = 0;
 
     for (i = 0; i < bookCount; i++) {
-        if (books[i].active) {
-            totalStock += books[i].stock;
-            if (books[i].stock == 0) outOfStock++;
+        if (bookActive[i] == 1) {
+            totalStock += bookStock[i];
+            if (bookStock[i] == 0) outOfStock++;
         }
     }
+
     for (i = 0; i < customerCount; i++) {
-        if (customers[i].active) {
-            if (customers[i].isVIP) vip++;
-            else normal++;
+        if (customerActive[i] == 1) {
+            if (customerTypeVIP[i] == 1) vipCount++;
+            else normalCount++;
         }
     }
+
     for (i = 0; i < invoiceCount; i++) {
-        if (invoices[i].active) revenue += invoices[i].total;
-    }
-
-    printf("\n===== THONG KE =====\n");
-    printf("Tong so luong sach trong kho: %d\n", totalStock);
-    printf("So sach het hang: %d\n", outOfStock);
-    printf("So khach Thuong: %d\n", normal);
-    printf("So khach VIP: %d\n", vip);
-    printf("Tong doanh thu: %.2f\n", revenue);
-
-    printf("Danh sach sach het hang:\n");
-    for (i = 0; i < bookCount; i++) {
-        if (books[i].active && books[i].stock == 0) {
-            printf("- %s | %s\n", books[i].isbn, books[i].title);
+        if (invoiceActive[i] == 1) {
+            revenue += invoiceTotal[i];
         }
     }
+
+    printf("\n--- THONG KE ---\n");
+    printf("Tong so luong sach trong kho: %d\n", totalStock);
+    printf("So dau sach het hang: %d\n", outOfStock);
+    printf("So KH Thuong: %d\n", normalCount);
+    printf("So KH VIP: %d\n", vipCount);
+    printf("Tong doanh thu: %.2f\n", revenue);
 }
 
-void menuCustomers() {
+/* ================== Menu ================== */
+void customerMenu() {
     int choice;
     do {
-        printf("\n=== QUAN LY KHACH HANG ===\n");
-        printf("1. Xem danh sach\n2. Them\n3. Chinh sua\n4. Xoa\n5. Tim theo SDT\n6. Tim theo ten\n0. Quay lai\n");
-        printf("Chon: "); scanf("%d", &choice); getchar();
-        switch (choice) {
-            case 1: viewCustomers(); break;
-            case 2: addCustomer(); break;
-            case 3: editCustomer(); break;
-            case 4: deleteCustomer(); break;
-            case 5: searchCustomerByPhone(); break;
-            case 6: searchCustomerByName(); break;
-            case 0: break;
-            default: printf("Lua chon khong hop le.\n");
-        }
+        printf("\n=== MENU KHACH HANG ===\n");
+        printf("1. Xem danh sach\n");
+        printf("2. Them\n");
+        printf("3. Sua\n");
+        printf("4. Xoa\n");
+        printf("5. Tim theo SDT\n");
+        printf("6. Tim theo ten\n");
+        printf("0. Quay lai\n");
+        printf("Chon: ");
+        scanf("%d", &choice);
+        getchar();
+
+        if (choice == 1) listCustomers();
+        else if (choice == 2) addCustomer();
+        else if (choice == 3) editCustomer();
+        else if (choice == 4) deleteCustomer();
+        else if (choice == 5) searchCustomerByPhone();
+        else if (choice == 6) searchCustomerByName();
     } while (choice != 0);
 }
 
-void menuBooks() {
+void bookMenu() {
     int choice;
     do {
-        printf("\n=== QUAN LY SACH ===\n");
-        printf("1. Xem danh sach\n2. Them\n3. Chinh sua\n4. Xoa\n5. Tim theo ISBN\n6. Tim theo ten\n0. Quay lai\n");
-        printf("Chon: "); scanf("%d", &choice); getchar();
-        switch (choice) {
-            case 1: viewBooks(); break;
-            case 2: addBook(); break;
-            case 3: editBook(); break;
-            case 4: deleteBook(); break;
-            case 5: searchBookByISBN(); break;
-            case 6: searchBookByTitle(); break;
-            case 0: break;
-            default: printf("Lua chon khong hop le.\n");
-        }
+        printf("\n=== MENU SACH ===\n");
+        printf("1. Xem danh sach\n");
+        printf("2. Them\n");
+        printf("3. Sua\n");
+        printf("4. Xoa\n");
+        printf("5. Tim theo ISBN\n");
+        printf("6. Tim theo ten\n");
+        printf("0. Quay lai\n");
+        printf("Chon: ");
+        scanf("%d", &choice);
+        getchar();
+
+        if (choice == 1) listBooks();
+        else if (choice == 2) addBook();
+        else if (choice == 3) editBook();
+        else if (choice == 4) deleteBook();
+        else if (choice == 5) searchBookByISBN();
+        else if (choice == 6) searchBookByTitle();
     } while (choice != 0);
 }
 
 int main() {
     int choice;
+
     do {
-        printf("\n===== CHUONG TRINH QUAN LY NHA SACH =====\n");
+        printf("\n===== QUAN LY NHA SACH =====\n");
         printf("1. Quan ly khach hang\n");
         printf("2. Quan ly sach\n");
-        printf("3. Lap hoa don ban hang\n");
-        printf("4. Quan ly kho (cap nhat ton kho)\n");
-        printf("5. Thong ke co ban\n");
+        printf("3. Lap hoa don\n");
+        printf("4. Cap nhat ton kho\n");
+        printf("5. Thong ke\n");
         printf("0. Thoat\n");
         printf("Nhap lua chon: ");
-        scanf("%d", &choice); getchar();
 
-        switch (choice) {
-            case 1: menuCustomers(); break;
-            case 2: menuBooks(); break;
-            case 3: createInvoice(); break;
-            case 4: updateStock(); break;
-            case 5: basicStats(); break;
-            case 0: printf("Tam biet!\n"); break;
-            default: printf("Lua chon khong hop le.\n");
-        }
+        scanf("%d", &choice);
+        getchar();
+
+        if (choice == 1) customerMenu();
+        else if (choice == 2) bookMenu();
+        else if (choice == 3) createInvoice();
+        else if (choice == 4) updateStock();
+        else if (choice == 5) statistics();
+
     } while (choice != 0);
 
     return 0;
